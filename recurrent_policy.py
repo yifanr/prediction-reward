@@ -304,16 +304,18 @@ class RecurrentActorCriticPolicy(ActorCriticPolicy):
         log_prob = distribution.log_prob(actions)
         values = self.value_net(latent_vf)
         feature_preds = self.prediction_net(latent)
-        error_preds = self.error_net(latent)
+        # error_preds = self.error_net(latent)
         next_features = self.extract_features(next_obs)#.detach()
         episode_ends = th.unsqueeze(episode_ends, -1)
 
-        # Feature prediction error calculation - zero when next_obs is a new episode
-        feature_pred_error = th.square(feature_preds - next_features) * (1.0 - episode_ends)
-        # Error prediction error calculation - use absolute value and also zero when new episode
-        error_pred_error = th.square(feature_pred_error.detach() - error_preds) * (1.0 - episode_ends)
+        feature_pred_error = th.relu(next_features * (next_features - feature_preds))
 
-        return values, log_prob, distribution.entropy(), feature_pred_error, error_pred_error
+        # # Feature prediction error calculation - zero when next_obs is a new episode
+        # feature_pred_error = th.square(feature_preds - next_features) * (1.0 - episode_ends)
+        # # Error prediction error calculation - use absolute value and also zero when new episode
+        # error_pred_error = th.square(feature_pred_error.detach() - error_preds) * (1.0 - episode_ends)
+
+        return values, log_prob, distribution.entropy(), feature_preds, feature_pred_error #, error_pred_error
 
 
     def _predict(

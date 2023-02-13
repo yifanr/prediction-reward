@@ -84,7 +84,8 @@ class RecurrentPPO(OnPolicyAlgorithm):
         ent_coef: float = 0.0,
         vf_coef: float = 0.5,
         pred_coef: float = 0.5,
-        err_coef: float = 0.5,
+        pred_penalty_coef: float = 0.01,
+        # err_coef: float = 0.5,
         max_grad_norm: float = 0.5,
         use_sde: bool = False,
         sde_sample_freq: int = -1,
@@ -130,7 +131,8 @@ class RecurrentPPO(OnPolicyAlgorithm):
         self.target_kl = target_kl
         self._last_lstm_states = None
         self.pred_coef = pred_coef
-        self.err_coef = err_coef
+        self.pred_penalty_coef = pred_penalty_coef
+        # self.err_coef = err_coef
         self._last_preds = None
         self._last_error_preds = None
 
@@ -332,7 +334,8 @@ class RecurrentPPO(OnPolicyAlgorithm):
         pg_losses, value_losses = [], []
         clip_fractions = []
         feature_pred_losses = []
-        error_pred_losses = []
+        pred_size_losses = []
+        # error_pred_losses = []
 
         continue_training = True
 
@@ -353,7 +356,7 @@ class RecurrentPPO(OnPolicyAlgorithm):
                 if self.use_sde:
                     self.policy.reset_noise(self.batch_size)
 
-                values, log_prob, entropy, feature_pred_error, error_pred_error = self.policy.evaluate_actions(
+                values, log_prob, entropy, feature_pred, feature_pred_error = self.policy.evaluate_actions(
                     rollout_data.observations,
                     actions,
                     rollout_data.lstm_states,
@@ -411,12 +414,16 @@ class RecurrentPPO(OnPolicyAlgorithm):
 
                 feature_pred_losses.append(feature_pred_loss.item())
 
-                error_pred_loss = th.mean(error_pred_error)
+                pred_size_loss = self.pred_penalty_coef * th.mean(th.abs(feature_pred))
 
-                error_pred_losses.append(error_pred_loss.item())
+                pred_size_losses.append(pred_size_loss.item())
+
+                # error_pred_loss = th.mean(error_pred_error)
+
+                # error_pred_losses.append(error_pred_loss.item())
 
 
-                loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + self.pred_coef * feature_pred_loss + self.err_coef * error_pred_loss
+                loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + self.pred_coef * (feature_pred_loss + pred_size_loss) #+ self.err_coef * error_pred_loss
 
                 # Calculate approximate form of reverse KL Divergence for early stopping
                 # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
@@ -451,7 +458,8 @@ class RecurrentPPO(OnPolicyAlgorithm):
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
         self.logger.record("train/value_loss", np.mean(value_losses))
         self.logger.record("train/feature_pred_loss", np.mean(feature_pred_losses))
-        self.logger.record("train/error_pred_loss", np.mean(error_pred_losses))
+        self.logger.record("train/pred_size_loss", np.mean(pred_size_losses))
+        # self.logger.record("train/error_pred_loss", np.mean(error_pred_losses))
         self.logger.record("train/approx_kl", np.mean(approx_kl_divs))
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
         self.logger.record("train/loss", loss.item())
