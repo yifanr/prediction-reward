@@ -244,7 +244,7 @@ class RecurrentPPO(OnPolicyAlgorithm):
                 obs_tensor = obs_as_tensor(self._last_obs, self.device)
                 episode_starts = th.tensor(self._last_episode_starts, dtype=th.float32, device=self.device)
                 #TODO: use features and predictions for reward
-                actions, values, log_probs, lstm_states  = self.policy.forward(obs_tensor, lstm_states, episode_starts)
+                actions, values, log_probs, lstm_states, feature_preds  = self.policy.forward(obs_tensor, lstm_states, episode_starts)
 
             actions = actions.cpu().numpy()
 
@@ -256,9 +256,14 @@ class RecurrentPPO(OnPolicyAlgorithm):
 
             new_obs, rewards, dones, infos = env.step(clipped_actions)
 
+            next_features = self.policy.extract_features(obs_as_tensor(new_obs, self.device))
+            pred_rewards = th.sum(th.relu(next_features * (next_features - feature_preds)), axis=-1)
+            pred_rewards = pred_rewards.cpu().numpy() * (1-dones)
+            rewards = pred_rewards
+
             self.num_timesteps += env.num_envs
 
-            # Give access to local variables
+            # Give access to local variablesS
             callback.update_locals(locals())
             if callback.on_step() is False:
                 return False

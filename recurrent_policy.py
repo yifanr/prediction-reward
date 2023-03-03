@@ -221,13 +221,15 @@ class RecurrentActorCriticPolicy(ActorCriticPolicy):
         latent_pi = self.mlp_extractor.forward_actor(latent)
         latent_vf = self.mlp_extractor.forward_critic(latent)
 
+        feature_preds = self.prediction_net(latent)
+
         # Evaluate the values for the given observations
         values = self.value_net(latent_vf)
         distribution = self._get_action_dist_from_latent(latent_pi)
         actions = distribution.get_actions(deterministic=deterministic)
         log_prob = distribution.log_prob(actions)
 
-        return actions, values, log_prob, lstm_states
+        return actions, values, log_prob, lstm_states, feature_preds
 
 
     def get_distribution(
@@ -308,7 +310,7 @@ class RecurrentActorCriticPolicy(ActorCriticPolicy):
         next_features = self.extract_features(next_obs)#.detach()
         episode_ends = th.unsqueeze(episode_ends, -1)
 
-        feature_pred_error = th.relu(next_features * (next_features - feature_preds))
+        feature_pred_error = th.relu(next_features * (next_features - feature_preds)) * (1-episode_ends)
 
         # # Feature prediction error calculation - zero when next_obs is a new episode
         # feature_pred_error = th.square(feature_preds - next_features) * (1.0 - episode_ends)
