@@ -255,11 +255,13 @@ class RecurrentPPO(OnPolicyAlgorithm):
                 clipped_actions = np.clip(actions, self.action_space.low, self.action_space.high)
 
             new_obs, rewards, dones, infos = env.step(clipped_actions)
+            
+            external_rewards = rewards
 
             next_features = self.policy.extract_features(obs_as_tensor(new_obs, self.device))
             pred_rewards = th.sum(th.relu(next_features * (next_features - feature_preds)), axis=-1)
             pred_rewards = pred_rewards.cpu().numpy() * (1-dones)
-            rewards = pred_rewards
+            # rewards = pred_rewards
 
             self.num_timesteps += env.num_envs
 
@@ -463,7 +465,7 @@ class RecurrentPPO(OnPolicyAlgorithm):
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
         self.logger.record("train/value_loss", np.mean(value_losses))
         self.logger.record("train/feature_pred_loss", np.mean(feature_pred_losses))
-        self.logger.record("train/pred_size_loss", np.mean(pred_size_losses))
+        self.logger.record("train/feature_pred_size_loss", np.mean(pred_size_losses))
         # self.logger.record("train/error_pred_loss", np.mean(error_pred_losses))
         self.logger.record("train/approx_kl", np.mean(approx_kl_divs))
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
