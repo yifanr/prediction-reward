@@ -8,8 +8,8 @@ from recurrent_ppo import RecurrentPPO
 import gym
 import os
 
-models_dir = "models/Lunar_PPO"
-logs_dir = "logs"
+models_dir = "models/Lunar_RPPO"
+logs_dir = "temp"
 
 if not os.path.exists(models_dir):
     os.makedirs(models_dir)
@@ -24,17 +24,17 @@ if not os.path.exists(logs_dir):
 # Frame-stacking with 4 frames
 # env = VecFrameStack(env, n_stack=4)
 
-env = env_util.make_vec_env("LunarLander-v2", n_envs=4)
+env = env_util.make_vec_env("LunarLander-v2", n_envs=1)
 
-model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=logs_dir)
+# model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=logs_dir)
 
-# model = RecurrentPPO(RecurrentActorCriticPolicy, env, verbose=1, vf_coef=0.0001, tensorboard_log=logs_dir)
+model = RecurrentPPO(RecurrentActorCriticPolicy, env, verbose=1, vf_coef=0.0001, tensorboard_log=logs_dir)
 
 TIMESTEPS = 25000
 
 i = 0
 while True:
-    model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, tb_log_name="Lunar_PPO")
+    model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, tb_log_name="Lunar_RPPO")
     i += 1
     model.save(f"{models_dir}/{TIMESTEPS*i}")
 
