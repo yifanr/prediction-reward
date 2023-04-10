@@ -18,6 +18,7 @@ class RewardEnv(gym.Env):
     self.base_env = base_env
     self.hidden_size = hidden_size
     self.hidden_state = torch.zeros[hidden_size]
+    self.last_feature = None
 
   def step(self, action):
     self.hidden_state = action[0:self.hidden_size]

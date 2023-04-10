@@ -3,6 +3,15 @@ from typing import NamedTuple, Tuple
 import torch as th
 from stable_baselines3.common.type_aliases import TensorDict
 
+class RolloutBufferSamples(NamedTuple):
+    observations: th.Tensor
+    actions: th.Tensor
+    old_values: th.Tensor 
+    old_log_prob: th.Tensor
+    advantages: th.Tensor
+    returns: th.Tensor
+    next_observations: th.Tensor
+    episode_ends: th.Tensor
 
 class RecurrentRolloutBufferSamples(NamedTuple):
     observations: th.Tensor
