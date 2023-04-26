@@ -17,6 +17,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn, obs_as_tensor, safe_mean
 
 from buffers import RolloutBuffer
+from losses import minmax_loss, simple_loss, gaussian_loss
 
 SelfPPO = TypeVar("SelfPPO", bound="PPO")
 
@@ -95,7 +96,7 @@ class PPO(OnPolicyAlgorithm):
         ent_coef: float = 0.0,
         vf_coef: float = 0.5,
         pred_coef: float = 0.5,
-        pred_penalty_coef: float = 0.01,
+        pred_penalty_coef: float = 0.001,
         max_grad_norm: float = 0.5,
         use_sde: bool = False,
         sde_sample_freq: int = -1,
@@ -249,7 +250,7 @@ class PPO(OnPolicyAlgorithm):
             with th.no_grad():
                 # Convert to pytorch tensor or to TensorDict
                 obs_tensor = obs_as_tensor(self._last_obs, self.device)
-                actions, values, log_probs, feature_preds = self.policy(obs_tensor)
+                actions, values, log_probs, feature_preds, std_preds = self.policy(obs_tensor)
             actions = actions.cpu().numpy()
 
             # Rescale and perform action
@@ -262,9 +263,11 @@ class PPO(OnPolicyAlgorithm):
 
             # Calculate exploration reward
             next_features = self.policy.extract_features(obs_as_tensor(new_obs, self.device)).detach()
-            pred_rewards = th.sum(th.relu(th.sign(next_features) * (next_features - feature_preds)), axis=-1)
+
+            pred_rewards = self.policy.loss_fn(feature_preds, std_preds, next_features)[1]
             pred_rewards = pred_rewards.cpu().numpy() * (1-dones)
-            # rewards = pred_rewards
+
+            rewards += pred_rewards
 
             self.num_timesteps += env.num_envs
 
@@ -333,7 +336,7 @@ class PPO(OnPolicyAlgorithm):
         pg_losses, value_losses = [], []
         clip_fractions = []
         feature_pred_losses = []
-        pred_size_losses = []
+        # pred_size_losses = []
 
         continue_training = True
 
@@ -351,7 +354,7 @@ class PPO(OnPolicyAlgorithm):
                 if self.use_sde:
                     self.policy.reset_noise(self.batch_size)
 
-                values, log_prob, entropy, feature_pred, feature_pred_error = self.policy.evaluate_actions(
+                values, log_prob, entropy, pred_loss = self.policy.evaluate_actions(
                     rollout_data.observations,
                     actions,
                     rollout_data.next_observations,
@@ -398,15 +401,9 @@ class PPO(OnPolicyAlgorithm):
 
                 entropy_losses.append(entropy_loss.item())
 
-                feature_pred_loss = th.mean(feature_pred_error)
+                feature_pred_losses.append(th.mean(pred_loss).item())
 
-                feature_pred_losses.append(feature_pred_loss.item())
-
-                pred_size_loss = self.pred_penalty_coef * th.mean(th.abs(feature_pred))
-
-                pred_size_losses.append(pred_size_loss.item())
-
-                loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + self.pred_coef * (feature_pred_loss + pred_size_loss)
+                loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + self.pred_coef * pred_loss
 
                 # Calculate approximate form of reverse KL Divergence for early stopping
                 # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
@@ -441,7 +438,7 @@ class PPO(OnPolicyAlgorithm):
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
         self.logger.record("train/value_loss", np.mean(value_losses))
         self.logger.record("train/feature_pred_loss", np.mean(feature_pred_losses))
-        self.logger.record("train/feature_pred_size_loss", np.mean(pred_size_losses))
+        # self.logger.record("train/feature_pred_size_loss", np.mean(pred_size_losses))
         self.logger.record("train/approx_kl", np.mean(approx_kl_divs))
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
         self.logger.record("train/loss", loss.item())
@@ -472,3 +469,5 @@ class PPO(OnPolicyAlgorithm):
             reset_num_timesteps=reset_num_timesteps,
             progress_bar=progress_bar,
         )
+    
+

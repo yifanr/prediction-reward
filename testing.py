@@ -8,9 +8,11 @@ from recurrent_ppo import RecurrentPPO
 from ppo import PPO
 from policies import ActorCriticPolicy, ActorCriticCnnPolicy
 import gym
+from losses import minmax_loss, simple_loss, gaussian_loss
 import os
+from gym_envs.wrappers.simple_distractor import SimpleDistractorWrapper
 
-models_dir = "models/Explore_Pong_linear_rewards"
+models_dir = "models/mc_gaussian"
 logs_dir = "temp"
 
 if not os.path.exists(models_dir):
@@ -26,19 +28,22 @@ if not os.path.exists(logs_dir):
 # Frame-stacking with 4 frames
 # env = VecFrameStack(env, n_stack=4)
 
-# env = env_util.make_vec_env("LunarLander-v2", n_envs=1)
-env = gym.make("Pong-v4")
+env = env_util.make_vec_env("MountainCar-v0", n_envs=1)
+# env = gym.make("Pong-v4")
+# env = gym.make('gym_envs/GridWorld-v0', size=20)
+# env = SimpleDistractorWrapper(env)
+print(env.reset())
 
 # model = PPO(ActorCriticPolicy, env, verbose=1, tensorboard_log=logs_dir)
-model = PPO(ActorCriticCnnPolicy, env, verbose=1, tensorboard_log=logs_dir)
+model = PPO(ActorCriticPolicy, env, verbose=1, tensorboard_log=logs_dir)
 
 # model = RecurrentPPO(RecurrentActorCriticPolicy, env, verbose=1, vf_coef=0.0001, tensorboard_log=logs_dir)
 
-TIMESTEPS = 25000
+TIMESTEPS = 100000
 
 i = 0
 while True:
-    model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, tb_log_name="Explore_Pong_linear_rewards")
+    model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, tb_log_name="mc_gaussian")
     i += 1
     model.save(f"{models_dir}/{TIMESTEPS*i}")
 

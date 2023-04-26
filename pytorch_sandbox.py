@@ -1,12 +1,11 @@
 import torch as th
 from torch import nn
+import numpy as np
 
-lstm = nn.LSTM(4, 8, num_layers=1,)
-input = th.randn(1,5,4)
-print(input.shape)
-print(lstm.input_size)
-output, states = lstm(input)
-print(states[0])
-print(states[1])
-print(output)
-
+size = 10
+indices = np.arange(size)
+sin = np.sin(6*indices/size) * np.ones((size, size))
+cos = np.expand_dims(np.cos(6*indices/size), 1) * np.ones((size, size))
+data = sin+cos
+print(data[(0,0)])
+        

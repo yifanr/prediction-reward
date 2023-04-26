@@ -10,8 +10,8 @@ from policies import ActorCriticPolicy
 import gym
 import os
 
-models_dir = "models/Explore_Pong"
-model_path = f"{models_dir}/2000000.zip"
+models_dir = "models/mc_minmax"
+model_path = f"{models_dir}/400000.zip"
 
 if not os.path.exists(models_dir):
     os.makedirs(models_dir)
@@ -25,9 +25,9 @@ if not os.path.exists(models_dir):
 
 episodes = 100
 
-# env = env_util.make_vec_env("LunarLander-v2", n_envs=1)
+env = env_util.make_vec_env("MountainCar-v0", n_envs=1)
 
-env = gym.make("Pong-v4")
+# env = gym.make("Pong-v4")
 
 model = PPO.load(model_path, env=env)
 

@@ -34,6 +34,7 @@ from stable_baselines3.common.type_aliases import Schedule
 from stable_baselines3.common.utils import get_device, is_vectorized_observation, obs_as_tensor
 
 from utils import action_to_onehot
+from losses import minmax_loss, simple_loss, gaussian_loss
 
 SelfBaseModel = TypeVar("SelfBaseModel", bound="BaseModel")
 
@@ -463,6 +464,7 @@ class ActorCriticPolicy(BasePolicy):
         self.net_arch = net_arch
         self.activation_fn = activation_fn
         self.ortho_init = ortho_init
+        self.loss_fn = gaussian_loss
 
         self.share_features_extractor = share_features_extractor
         self.features_extractor = self.make_features_extractor()
@@ -478,8 +480,14 @@ class ActorCriticPolicy(BasePolicy):
                 raise ValueError(
                     "Error: if the features extractor is not shared, there cannot be shared layers in the mlp_extractor"
                 )
-        hidden_size = (self.features_dim + self.action_space.n)*2
+        hidden_size = (self.features_dim + self.action_space.n)
         self.prediction_net = nn.Sequential(
+            nn.Linear(self.features_dim + self.action_space.n, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, self.features_dim),
+        )
+
+        self.std_net = nn.Sequential(
             nn.Linear(self.features_dim + self.action_space.n, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, self.features_dim),
@@ -632,7 +640,9 @@ class ActorCriticPolicy(BasePolicy):
         # Predict
         feature_preds = self.prediction_net(th.hstack((features, actions_onehot)))
 
-        return actions, values, log_prob, feature_preds
+        std_preds = self.std_net(th.hstack((features, actions_onehot)))
+
+        return actions, values, log_prob, feature_preds, std_preds
 
     def extract_features(self, obs: th.Tensor) -> Union[th.Tensor, Tuple[th.Tensor, th.Tensor]]:
         """
@@ -708,12 +718,15 @@ class ActorCriticPolicy(BasePolicy):
         entropy = distribution.entropy()
 
         feature_preds = self.prediction_net(th.hstack((features, action_to_onehot(actions, self.action_space))))
-        next_features = self.extract_features(next_obs)#.detach()
-        episode_ends = th.unsqueeze(episode_ends, -1)
+        next_features = self.extract_features(next_obs).detach()
+        episode_ends = th.squeeze(episode_ends)
+        std_preds = self.std_net(th.hstack((features, action_to_onehot(actions, self.action_space))))
 
-        feature_pred_error = th.relu(th.sign(next_features) * (next_features - feature_preds)) * (1-episode_ends)
+        pred_loss = self.loss_fn(feature_preds, std_preds, next_features)[0]
+        pred_loss = th.mean(pred_loss * (1 - episode_ends))
 
-        return values, log_prob, entropy, feature_preds, feature_pred_error
+        return values, log_prob, entropy, pred_loss
+    
 
     def get_distribution(self, obs: th.Tensor) -> Distribution:
         """
